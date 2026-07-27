@@ -1,0 +1,41 @@
+# Entorno Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Variables de entorno
+.env
+.env.*
+!.env.example
+
+# Datos y documentos del proyecto
+docs/
+pdfs/
+*.pdf
+*.doc
+*.docx
+*.ppt
+*.pptx
+*.xls
+*.xlsx
+*.csv
+
+# Bases vectoriales / cache local
+chroma_db/
+*.db
+*.sqlite3
+
+# Jupyter / notebooks
+.ipynb_checkpoints/
+
+# IDEs y sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
