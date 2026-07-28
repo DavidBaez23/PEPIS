@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+.vscode/
+frontend/node_modules/
+backend/venv/
+backend/data/
+pdfs/
+docs/
+.gemini/

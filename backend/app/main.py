@@ -1,4 +1,7 @@
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.rag_service import rag_service
@@ -18,9 +21,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def read_root():
-    return {"message": "Bienvenido a la API de PEPIS. Usa /docs para ver la documentación."}
+# Ruta absoluta a la carpeta dist del frontend
+# __file__ = backend/app/main.py → .parent = backend/app → .parent = backend → .parent = raíz del proyecto
+frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+
+if frontend_dist.exists():
+    app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
+    
+    @app.get("/")
+    def serve_react_app():
+        return FileResponse(str(frontend_dist / "index.html"))
+    
+    # Manejar rutas de React Router (opcional si luego se agregan)
+    @app.get("/{catchall:path}")
+    def serve_react_app_fallback(catchall: str):
+        if not catchall.startswith("api/"):
+            return FileResponse(str(frontend_dist / "index.html"))
+else:
+    @app.get("/")
+    def read_root():
+        return {"message": "Bienvenido a la API de PEPIS. Frontend no encontrado."}
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat_endpoint(request: ChatRequest):
