@@ -2,8 +2,8 @@ from pathlib import Path
 from langchain_chroma import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.output_parsers import StrOutputParser
 from app.core.config import settings
 
@@ -15,7 +15,7 @@ class RAGService:
         # Usar el mismo modelo multilingüe para consistencia
         self.embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
         
-        # Cargar la base de datos de manera dinámica (acepta que se hayan ingerido nuevos docs a futuro)
+        # Cargar la base de datos de manera dinámica
         self.vectorstore = Chroma(
             persist_directory=str(chroma_dir),
             embedding_function=self.embeddings
@@ -31,7 +31,7 @@ class RAGService:
             temperature=0.0
         )
         
-        # Prompt Estricto del Sistema
+        # Prompt del Sistema
         system_template = """Eres PEPIS, el Asistente Virtual Oficial del programa de Ingeniería de Sistemas de la UFPS.
 Tu única fuente de verdad es el siguiente contexto extraído de los documentos oficiales (como el PEP).
 Debes responder OBLIGATORIAMENTE en ESPAÑOL.
@@ -44,39 +44,51 @@ INSTRUCCIONES CRÍTICAS:
 - Si la pregunta no puede responderse con el contexto proporcionado, di amablemente que la información no se encuentra en la base de conocimientos actual.
 
 Contexto:
-{context}
+{context}"""
+        
+        self.prompt = ChatPromptTemplate.from_messages([
+            ("system", system_template),
+            MessagesPlaceholder(variable_name="history"),
+            ("human", "{question}")
+        ])
+        
+    def format_docs(self, docs):
+        """Formatea documentos incluyendo metadata de sección para dar contexto."""
+        formatted = []
+        for doc in docs:
+            header_info = ""
+            if doc.metadata:
+                headers = [v for k, v in sorted(doc.metadata.items()) if k.startswith("Header")]
+                if headers:
+                    header_info = f"[Sección: {' > '.join(headers)}]\n"
+            formatted.append(f"{header_info}{doc.page_content}")
+        return "\n\n---\n\n".join(formatted)
 
-Pregunta del usuario: {question}"""
-        
-        self.prompt = ChatPromptTemplate.from_template(system_template)
-        
-        # Pipeline RAG
-        def format_docs(docs):
-            """Formatea documentos incluyendo metadata de sección para dar contexto."""
-            formatted = []
-            for doc in docs:
-                header_info = ""
-                if doc.metadata:
-                    headers = [v for k, v in sorted(doc.metadata.items()) if k.startswith("Header")]
-                    if headers:
-                        header_info = f"[Sección: {' > '.join(headers)}]\n"
-                formatted.append(f"{header_info}{doc.page_content}")
-            return "\n\n---\n\n".join(formatted)
+    def ask(self, query: str, history: list = None) -> dict:
+        if history is None:
+            history = []
             
-        self.rag_chain = (
-            {"context": self.retriever | format_docs, "question": RunnablePassthrough()}
-            | self.prompt
-            | self.llm
-            | StrOutputParser()
-        )
+        formatted_history = []
+        for msg in history:
+            if msg.get("role") == "user":
+                formatted_history.append(HumanMessage(content=msg.get("content", "")))
+            elif msg.get("role") == "assistant":
+                formatted_history.append(AIMessage(content=msg.get("content", "")))
 
-    def ask(self, query: str) -> dict:
         # Recuperar fuentes para devolverlas en la API
         docs = self.retriever.invoke(query)
         sources = [{"content": d.page_content[:200], "metadata": d.metadata} for d in docs]
         
+        # Generar contexto
+        context = self.format_docs(docs)
+        
         # Generar respuesta
-        answer = self.rag_chain.invoke(query)
+        chain = self.prompt | self.llm | StrOutputParser()
+        answer = chain.invoke({
+            "context": context,
+            "question": query,
+            "history": formatted_history
+        })
         
         return {
             "answer": answer,

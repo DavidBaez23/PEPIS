@@ -28,7 +28,7 @@ def chat_endpoint(request: ChatRequest):
         if not request.query.strip():
             raise HTTPException(status_code=400, detail="La consulta no puede estar vacía")
             
-        result = rag_service.ask(request.query)
+        result = rag_service.ask(request.query, request.history)
         return ChatResponse(
             answer=result["answer"],
             sources=result["sources"]
