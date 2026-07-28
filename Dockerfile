@@ -21,7 +21,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copiamos requirements y los instalamos
 COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Instalamos primero torch en su build CPU-only (App Platform no tiene GPU).
+# Así, cuando sentence-transformers lo pida como dependencia más abajo,
+# pip ve que el requisito ya está satisfecho y NO baja la versión con CUDA ~2.5 GB de librerías).
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r requirements.txt
 
 # Copiamos todo el backend (esto incluirá chroma_db ya que no está en .dockerignore)
 COPY backend/ ./
